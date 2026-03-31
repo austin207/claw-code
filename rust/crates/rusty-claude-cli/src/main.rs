@@ -12,7 +12,9 @@ use api::{
     ToolResultContentBlock,
 };
 
-use commands::{handle_slash_command, render_slash_command_help, SlashCommand};
+use commands::{
+    handle_slash_command, render_slash_command_help, resume_supported_slash_commands, SlashCommand,
+};
 use compat_harness::{extract_manifest, UpstreamPaths};
 use render::{Spinner, TerminalRenderer};
 use runtime::{
@@ -1065,21 +1067,38 @@ fn print_help() {
     println!("rusty-claude-cli");
     println!();
     println!("Usage:");
-    println!("  rusty-claude-cli [--model MODEL]             Start interactive REPL");
-    println!(
-        "  rusty-claude-cli [--model MODEL] prompt TEXT Send one prompt and stream the response"
-    );
+    println!("  rusty-claude-cli [--model MODEL]");
+    println!("      Start interactive REPL");
+    println!("  rusty-claude-cli [--model MODEL] prompt TEXT");
+    println!("      Send one prompt and stream the response");
+    println!("  rusty-claude-cli --resume SESSION.json [/status] [/compact] [...]");
+    println!("      Inspect or maintain a saved session without entering the REPL");
     println!("  rusty-claude-cli dump-manifests");
     println!("  rusty-claude-cli bootstrap-plan");
     println!("  rusty-claude-cli system-prompt [--cwd PATH] [--date YYYY-MM-DD]");
-    println!("  rusty-claude-cli --resume SESSION.json [/status] [/compact] [...]");
+    println!();
+    println!("Interactive slash commands:");
+    println!("{}", render_slash_command_help());
+    println!();
+    let resume_commands = resume_supported_slash_commands()
+        .into_iter()
+        .map(|spec| match spec.argument_hint {
+            Some(argument_hint) => format!("/{} {}", spec.name, argument_hint),
+            None => format!("/{}", spec.name),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("Resume-safe commands: {resume_commands}");
+    println!("Examples:");
+    println!("  rusty-claude-cli --resume session.json /status /compact /cost");
+    println!("  rusty-claude-cli --resume session.json /memory /config");
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         format_status_line, normalize_permission_mode, parse_args, render_init_claude_md,
-        render_repl_help, CliAction, SlashCommand, DEFAULT_MODEL,
+        render_repl_help, resume_supported_slash_commands, CliAction, SlashCommand, DEFAULT_MODEL,
     };
     use runtime::{ContentBlock, ConversationMessage, MessageRole};
     use std::path::{Path, PathBuf};
@@ -1180,6 +1199,18 @@ mod tests {
         assert!(help.contains("/memory"));
         assert!(help.contains("/init"));
         assert!(help.contains("/exit"));
+    }
+
+    #[test]
+    fn resume_supported_command_list_matches_expected_surface() {
+        let names = resume_supported_slash_commands()
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            vec!["help", "status", "compact", "clear", "cost", "config", "memory", "init",]
+        );
     }
 
     #[test]

@@ -35,6 +35,7 @@ pub struct SlashCommandSpec {
     pub name: &'static str,
     pub summary: &'static str,
     pub argument_hint: Option<&'static str>,
+    pub resume_supported: bool,
 }
 
 const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
@@ -42,56 +43,67 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         name: "help",
         summary: "Show available slash commands",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "status",
         summary: "Show current session status",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "compact",
         summary: "Compact local session history",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "model",
         summary: "Show or switch the active model",
         argument_hint: Some("[model]"),
+        resume_supported: false,
     },
     SlashCommandSpec {
         name: "permissions",
         summary: "Show or switch the active permission mode",
         argument_hint: Some("[read-only|workspace-write|danger-full-access]"),
+        resume_supported: false,
     },
     SlashCommandSpec {
         name: "clear",
         summary: "Start a fresh local session",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "cost",
         summary: "Show cumulative token usage for this session",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "resume",
         summary: "Load a saved session into the REPL",
         argument_hint: Some("<session-path>"),
+        resume_supported: false,
     },
     SlashCommandSpec {
         name: "config",
         summary: "Inspect discovered Claude config files",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "memory",
         summary: "Inspect loaded Claude instruction memory files",
         argument_hint: None,
+        resume_supported: true,
     },
     SlashCommandSpec {
         name: "init",
         summary: "Create a starter CLAUDE.md for this repo",
         argument_hint: None,
+        resume_supported: true,
     },
 ];
 
@@ -150,14 +162,30 @@ pub fn slash_command_specs() -> &'static [SlashCommandSpec] {
 }
 
 #[must_use]
+pub fn resume_supported_slash_commands() -> Vec<&'static SlashCommandSpec> {
+    slash_command_specs()
+        .iter()
+        .filter(|spec| spec.resume_supported)
+        .collect()
+}
+
+#[must_use]
 pub fn render_slash_command_help() -> String {
-    let mut lines = vec!["Available commands:".to_string()];
+    let mut lines = vec![
+        "Available commands:".to_string(),
+        "  (resume-safe commands are marked with [resume])".to_string(),
+    ];
     for spec in slash_command_specs() {
         let name = match spec.argument_hint {
             Some(argument_hint) => format!("/{} {}", spec.name, argument_hint),
             None => format!("/{}", spec.name),
         };
-        lines.push(format!("  {name:<20} {}", spec.summary));
+        let resume = if spec.resume_supported {
+            " [resume]"
+        } else {
+            ""
+        };
+        lines.push(format!("  {name:<20} {}{}", spec.summary, resume));
     }
     lines.join("\n")
 }
@@ -210,7 +238,8 @@ pub fn handle_slash_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        handle_slash_command, render_slash_command_help, slash_command_specs, SlashCommand,
+        handle_slash_command, render_slash_command_help, resume_supported_slash_commands,
+        slash_command_specs, SlashCommand,
     };
     use runtime::{CompactionConfig, ContentBlock, ConversationMessage, MessageRole, Session};
 
@@ -250,6 +279,7 @@ mod tests {
     #[test]
     fn renders_help_from_shared_specs() {
         let help = render_slash_command_help();
+        assert!(help.contains("resume-safe commands"));
         assert!(help.contains("/help"));
         assert!(help.contains("/status"));
         assert!(help.contains("/compact"));
@@ -262,6 +292,7 @@ mod tests {
         assert!(help.contains("/memory"));
         assert!(help.contains("/init"));
         assert_eq!(slash_command_specs().len(), 11);
+        assert_eq!(resume_supported_slash_commands().len(), 8);
     }
 
     #[test]
